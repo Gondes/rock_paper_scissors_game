@@ -1,16 +1,27 @@
 #press ctrl-shift-b to run code
-#require '../2Dspace/2Dspace'
+require './user'
 require 'sqlite3'
 
 class RockPaperScissors
 
   def initialize
     open_game_database
-    @player_name = "Player"
+    generate_default_user
     generate_win_array
-    reset_stats
-    display_stats
+  end
+
+  def start_up
+    clear_screen
     menu
+  end
+
+  def generate_default_user
+    @user1 = User.new
+    @user1.name = "Player 1"
+    @user1.reset_stats
+    @user2 = User.new
+    @user2.name = "Computer"
+    @user2.reset_stats
   end
 
   def generate_win_array
@@ -18,37 +29,15 @@ class RockPaperScissors
     #print @chart
   end
 
-  def display_stats
-    puts "\n\n----------------Stats----------------"
-    puts "              Name: #{@player_name}"
-    puts "      Games Played: #{@games_played}"
-    puts "        Wins Total: #{@wins_total}"
-    puts "        Loss Total: #{@loss_total}"
-    puts "        Ties Total: #{@ties_total}"
-    puts "   Best Win Streak: #{@best_win_streak}"
-    puts "Current Win Streak: #{@current_win_streak}"
-    puts "-------------------------------------"
-  end
-
-  def reset_stats
-    @games_played = 0
-    @wins_total = 0
-    @loss_total = 0
-    @ties_total = 0
-    @best_win_streak = 0
-    @current_win_streak = 0
-    puts "\n\n--------Stats have been reset--------"
-  end
-
   def display_menu_options
     puts "\n\n------Rock Paper Scissors Menu!------"
-    puts "Hello #{@player_name}!"
+    puts "Hello #{@user1.name}!"
     puts "1. Start New Game"
     puts "2. Display Stats"
     puts "3. Reset Stats"
-    puts "4. Login"
-    puts "5. Save Stats"
-    #puts "6. Delete Current User"
+    puts "4. Save Stats"
+    puts "5. Login"
+    puts "6. Delete Current User"
     puts "9. Exit"
     puts "-----Please enter a valid number-----"
   end
@@ -59,66 +48,118 @@ class RockPaperScissors
     until i.eql? 9
       display_menu_options
       i = gets.chomp.to_i
-      #i = 1 + i.to_i
-      #puts "You have entered #{i}"
       case i
       when 1
         game
       when 2
-        display_stats
+        @user1.display_stats
       when 3
-        reset_stats
+        @user1.reset_stats
+        @user2.reset_stats
+        puts "\n\n--------Stats have been reset--------"
       when 4
-        display_login_menu
+        save_stats(@user1)
       when 5
-        save_game_record
+        display_login_menu(@user1)
+      when 6
+        delete_current_user
       when 9
         close_game_database
+        clear_screen
         puts "Thank you for playing!\n\n"
       else
       end
     end
   end
 
+  def save_stats(user)
+    puts "Do you wish to save data for the user #{user.name}? (y/n)"
+    if gets.chomp.to_s.eql? "y"
+      save_game_record(user)
+    else
+      puts "Data for #{user.name} was not saved!"
+    end
+  end
+
+  def clear_screen
+    system "clear" or system "cls"
+  end
+
 #----------------------------------GAME LOGIC----------------------------------#
 
-  def game_options
-    puts "\n\n---Pick your hand!---"
+  def game_options player
+    puts "\n\n---#{player.name} pick your hand!---"
     puts "1. Rock"
     puts "2. Paper"
     puts "3. Scisors"
-    puts "9. I quit"
+    puts "9. Back"
     return gets.chomp.to_i
+  end
+
+  def display_game_menu
+    puts "\n\n--------Please select a mode--------"
+    puts "1. One Player"
+    puts "2. Two Player"
+    puts "9. Back"
   end
 
   def game
     memory = []
-    y = 0
-    #puts "--------Please select a mode--------"
-    #puts "1. One Player"
-    #puts "2. Two Player"
-    #puts "3. Best of 5"
-    #puts "4. Infinite"
-    while y != 9
-      y = game_options
-      if y != 9
-        update_stats(generate_result(y, artificial_intelligence))
+    i = 0
+    while i != 9
+      display_game_menu
+      i = gets.chomp.to_i
+      case i
+      when 1
+        game_one_player
+      when 2
+        game_two_player
+      when 9
+        #puts "\n\n----You have exited the game----"
+      else
+        puts "---Invalid Input---"
       end
     end
   end
 
   def game_one_player
     y = 0
+    clear_screen
     while y != 9
-      y = game_options
-      if y != 9
-        update_stats(generate_result(y, artificial_intelligence))
-      end
+      y = game_options(@user1)
+      clear_screen
+      (y == 9)? break :
+
+      update_stats(generate_result(y, artificial_intelligence))
     end
   end
 
   def game_two_player
-    system "clear" or system "cls"
+    puts "Please enter a second user to challenge."
+    (!display_login_menu(@user2))? return : 
+
+    p1 = 0
+    clear_screen
+    while p1 != 9
+      p1 = game_options(@user1)
+      clear_screen
+      (p1 == 9)? break :
+
+      p2 = game_options(@user2)
+      clear_screen
+      (p2 == 9)? break :
+
+      update_stats(generate_result(p1, p2))
+    end
+    disconnect_user_2
+  end
+
+  def disconnect_user_2
+    puts "Logging out of user #{@user2.name}"
+    save_stats(@user2)
+
+    @user2.name = "Computer"
+    @user2.reset_stats
   end
 
   def artificial_intelligence
@@ -126,48 +167,46 @@ class RockPaperScissors
   end
 
   def valid_option(x)
-    if (x > 4) || (x < 1)
-      x = 4
-    end
-    #((x > 4) || (x < 1))? x = 4 end
-    return x
+    ((x > 4) || (x < 1))? 4 : x
   end
 
-  def generate_result(y, a)
+  def generate_result(p1, p2)
     puts "\n\n-----Results------"
-    y = valid_option(y)
-    a = valid_option(a)
-    puts "#{player_name} threw #{@chart[y][0]}"
-    puts "Player 2 threw #{@chart[0][a]}"
-    return @chart[y][a]
+    p1 = valid_option(p1)
+    p2 = valid_option(p2)
+    puts "#{@user1.name} threw #{@chart[p1][0]}"
+    puts "#{@user2.name} threw #{@chart[0][p2]}"
+    return @chart[p1][p2]
   end
-
   def update_stats(x)
     if x == 1
-      puts "--#{player_name} Wins!--"
-      @wins_total += 1
-      @current_win_streak += 1
-      if @current_win_streak > @best_win_streak
-        @best_win_streak += 1
-      end
+      puts "--#{@user1.name} Wins!--"
+      @user1.win
+      @user2.lose
     elsif x == -1
-      puts "--Player 2 Wins!--"
-      @loss_total += 1
-      @current_win_streak = 0
+      puts "--#{@user2.name} Wins!--"
+      @user1.lose
+      @user2.win
     else
       puts "----Its A Tie!----"
-      @ties_total += 1
+      @user1.tie
+      @user2.tie
     end
-    @games_played += 1
   end
 
 #---------------------------DATABASE MANAGEMENT METHODS--------------------------#
 
-  def display_login_menu
+  def display_login_menu(user)
     puts "\n\n-------------Login Menu-------------"
     puts "Please enter your username:"
     name = gets.chomp.to_s
-    load_game_record(name)
+    if (name.eql? @user1.name) || (name.eql? @user2.name)
+      puts "#{name} is alreadly logged on\nPlease try again later"
+      false
+    else
+      load_game_record(name, user)
+      true
+    end
   end
 
   def open_game_database
@@ -175,76 +214,72 @@ class RockPaperScissors
     @db.execute "CREATE TABLE IF NOT EXISTS game_records(id INTEGER PRIMARY KEY, 
       name TEXT NOT NULL UNIQUE, games_played_count INT DEFAULT 0,
       win_count INT DEFAULT 0, loss_count INT DEFAULT 0, tie_count  INT DEFAULT 0,
-      best_win_streak INT DEFAULT 0, current_win_streak INT DEFAULT 0);"
+      best_win_streak INT DEFAULT 0, current_win_streak INT DEFAULT 0, is_online INT DEFAULT 0);"
   end
 
   def close_game_database
-    @db.close if db
+    @db.close if @db
   end
 
-  def load_game_record user_name
-    #db = SQLite3::Database.open "game.db"
-
+  def load_game_record(user_name, user)
     user_record = @db.execute( "select * from game_records where name = '#{user_name}'" )
 
     if user_record.empty?
-      puts "entered user_record.empty?"
-      @db.execute( "INSERT INTO game_records( name, games_played_count, win_count, loss_count, tie_count, best_win_streak, current_win_streak )
-        VALUES('#{user_name}', 0, 0, 0, 0, 0, 0)" )
+      @db.execute( "INSERT INTO game_records( name, games_played_count, win_count, loss_count, tie_count, best_win_streak, current_win_streak, is_online )
+        VALUES('#{user_name}', 0, 0, 0, 0, 0, 0, 1)" )
       puts "--New user #{user_name} has been created!--"
-      reset_stats
+      user.reset_stats
     else
-      @games_played = user_record[0][2]
-      @wins_total = user_record[0][3]
-      @loss_total = user_record[0][4]
-      @ties_total = user_record[0][5]
-      @best_win_streak = user_record[0][6]
-      @current_win_streak = user_record[0][7]
+      #if (@db.execute( "select is_online from game_records where name = '#{user_name}'")[0][0] == 0)
+      user.games_played = user_record[0][2]
+      user.wins_total = user_record[0][3]
+      user.loss_total = user_record[0][4]
+      user.ties_total = user_record[0][5]
+      user.best_win_streak = user_record[0][6]
+      user.current_win_streak = user_record[0][7]
       puts "----You have logged in as #{user_name}!----"
+      #else
+      #puts "#{user_name} is currently online\nPlease try again later"
     end
-    @player_name = user_name
-
-    #@db.close if db
+    user.name = user_name
   end
 
-  def save_game_record
-    #db = SQLite3::Database.open "game.db"
-
-    user_record = @db.execute( "select * from game_records where name = '#{@player_name}'" )
+  def save_game_record(user)
+    user_record = @db.execute( "select * from game_records where name = '#{user.name}'" )
 
     if user_record.empty?
       @db.execute( "INSERT INTO game_records( name, games_played_count, win_count, loss_count, tie_count, best_win_streak, current_win_streak )
-        VALUES('#{@player_name}', 0, 0, 0, 0, 0, 0)" )
-      puts "New save data for #{@player_name} has been created"
+        VALUES('#{user.name}', 0, 0, 0, 0, 0, 0)" )
+      puts "New save data for #{user.name} has been created"
     else
       @db.execute( "update game_records
-        set games_played_count = #{@games_played},
-            win_count = #{@wins_total},
-            loss_count = #{@loss_total},
-            tie_count = #{@ties_total},
-            best_win_streak = #{@best_win_streak},
-            current_win_streak = #{@current_win_streak}
-        where name = '#{@player_name}'" )
-      puts "Data for #{@player_name} has been saved"
+        set games_played_count = #{user.games_played},
+            win_count = #{user.wins_total},
+            loss_count = #{user.loss_total},
+            tie_count = #{user.ties_total},
+            best_win_streak = #{user.best_win_streak},
+            current_win_streak = #{user.current_win_streak}
+        where name = '#{user.name}'" )
+      puts "Data for #{user.name} has been saved"
     end
-
-    #@db.close if db
   end
 
   def delete_current_user
-    user_record = @db.execute( "select * from game_records where name = '#{@player_name}'" )
-      if user_record.empty?
-        puts "#{player_name} data does not exist"
+    user_record = @db.execute( "select * from game_records where name = '#{@user1.name}'" )
+    if user_record.empty?
+      puts "Data for #{@user1.name} does not exist"
+    else
+      puts "Are you sure? (y/n)"
+      if gets.chomp.to_s.eql? "y"
+        @db.execute( "DELETE FROM game_records
+          WHERE name = '#{@user1.name}'" )
+        puts "---#{@user1.name} has been deleted!---"
       else
-        db.execute( "DELETE FROM game_records
-          WHERE name = #{player_name}" )
+        puts "---Delete aborted---"
       end
+    end
   end
 end
 
-#puts rand(3) + 1
 a = RockPaperScissors.new
-
-#puts "Enter b"
-#b = gets.chomp
-#puts b
+a.start_up
